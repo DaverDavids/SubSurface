@@ -34,6 +34,8 @@ Config lives in config.yaml under the 'obs' key:
       - { type: set_text,   scene: Live, source: NowEngravingLabel, text: "Engraving: {name}" }
     engrave_finish_actions:
       - { type: hide_source, scene: Live, source: LaserCamOverlay }
+    board_full_actions:
+      - { type: set_text, scene: Live, source: NowEngravingLabel, text: "BOARD FULL – {name} queued" }
 """
 
 import threading
@@ -262,6 +264,46 @@ class OBSController:
         debug_print(f'OBS: running {len(actions)} finish action(s) for "{name}"')
         for action in actions:
             self._run_action(action, name=name)
+
+    def on_board_full(self, name=''):
+        """Call this when the board has no space left for a name.
+
+        Pulses the engrave_start actions (2 s) then engrave_finish actions (1 s)
+        three times in a background daemon thread so the queue worker is never
+        blocked.  Uses the same start/finish action lists so no new config keys
+        are required (though board_full_actions can be added to config if
+        desired for a distinct overlay in the future).
+        """
+        def _pulse():
+            start_actions  = config.get('obs.engrave_start_actions',  [])
+            finish_actions = config.get('obs.engrave_finish_actions', [])
+
+            # Fall back to board_full_actions if operator has configured them
+            board_full_actions = config.get('obs.board_full_actions', [])
+            if board_full_actions:
+                start_actions  = board_full_actions
+                finish_actions = board_full_actions
+
+            if not start_actions and not finish_actions:
+                debug_print(f'OBS board-full alert: no actions configured, skipping pulse for "{name}"')
+                return
+
+            debug_print(f'OBS: board full — pulsing alert 3× for "{name}"')
+            for pulse in range(3):
+                # 'start' phase — 2 seconds
+                for action in start_actions:
+                    self._run_action(action, name=name)
+                time.sleep(2)
+
+                # 'end' phase — 1 second
+                for action in finish_actions:
+                    self._run_action(action, name=name)
+                time.sleep(1)
+
+            debug_print(f'OBS: board-full pulse complete for "{name}"')
+
+        t = threading.Thread(target=_pulse, daemon=True, name='obs-board-full')
+        t.start()
 
     def test_action(self, action, name='test'):
         """Execute a single action immediately. Used by the web UI test button."""
