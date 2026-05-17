@@ -142,10 +142,20 @@ def process_queue(laser, layout, gcode_gen, obs):
                         target_w = width * (final_height / text_height)
 
                 if not position:
-                    debug_print(f"No space for '{name}' — board full")
+                    # Board is full — no space even at minimum font size.
+                    # Mark the job as failed so it stays in the queue and can be
+                    # replayed later via the Redo button once the board is reset.
+                    debug_print(f"No space for '{name}' — board full, keeping job for replay")
                     with queue_lock:
-                        job_mgr.update_job(job['id'], status='failed', error='Board is full! Reset board and click Redo.')
+                        job_mgr.update_job(
+                            job['id'],
+                            status='failed',
+                            error='Board is full! Reset board and click Redo to replay.'
+                        )
                     processing = False
+                    # Notify via OBS WebSocket: pulse start→2s / end→1s three times
+                    if obs:
+                        obs.on_board_full(name=name)
                     continue
 
                 x_local, y_local, final_height = position
@@ -257,11 +267,11 @@ def main():
     print('NOTE: Laser, OBS, Twitch, and Camera connect in the background.')
     print('      The web UI will be available immediately.')
 
-    # ── Laser ─────────────────────────────────────────────
+    # ── Laser ───────────────────────────────────────────────
     print('Laser controller initializing (background)...')
     laser = LaserController()
 
-    # ── Alarm indicator LED + recovery button ─────────────────
+    # ── Alarm indicator LED + recovery button ─────────────────────────
     # Pins default to GPIO 17 (LED) and GPIO 27 (button).
     # Override via System Administration panel in the web UI.
     # Gracefully skipped if gpiozero is not installed.
@@ -285,17 +295,17 @@ def main():
     # ── G-code generator ──────────────────────────────────
     gcode_gen = _build_gcode_gen()
 
-    # ── OBS controller ───────────────────────────────────
+    # ── OBS controller ──────────────────────────────────────
     print('OBS controller initializing (background)...')
     obs = OBSController()
 
-    # ── Twitch monitor ───────────────────────────────────
+    # ── Twitch monitor ─────────────────────────────────────
     print('Starting Twitch monitor (background)...')
     twitch = TwitchMonitor(enqueue_callback=enqueue_name)
     if config.get('twitch', {}).get('enabled', True):
         twitch.start()
 
-    # ── Camera stream ────────────────────────────────────
+    # ── Camera stream ──────────────────────────────────────
     camera = None
     if CAMERA_AVAILABLE and config.get('camera_enabled', True):
         print('Starting camera stream (background)...')
@@ -313,7 +323,7 @@ def main():
     )
     queue_thread.start()
 
-    # ── Handle Graceful Exit for Systemd ───────────────────
+    # ── Handle Graceful Exit for Systemd ──────────────────────
     def sigterm_handler(signum, frame):
         print('\nSIGTERM received, shutting down gracefully...')
         if twitch:    twitch.stop()
