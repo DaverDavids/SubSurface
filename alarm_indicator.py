@@ -22,8 +22,7 @@ Recovery Button (GPIO 27, physical pin 13)
   Door        -> ~ (resume; close door first)
   Unknown /
   disconnected-> reconnect attempt
-  Idle /
-  engraving   -> ignored (no-op)
+  Idle        -> $H (home) — always useful after a board reset or power-on
 
 Config overrides (data/config.json):
   alarm_led_gpio_pin       (default 17)
@@ -183,10 +182,6 @@ class AlarmIndicator:
             state = self._laser.machine_state.lower()
             debug_print(f"Recovery button pressed — machine state: '{state}'")
 
-            if state in _IDLE_STATES:
-                debug_print("Recovery: machine already Idle, nothing to do")
-                return
-
             if state in _ALARM_STATES:
                 debug_print("Recovery: Alarm — sending $X (unlock) then $H (home)")
                 self._laser.clear_stop()
@@ -207,6 +202,13 @@ class AlarmIndicator:
             elif not self._laser.connected:
                 debug_print("Recovery: Not connected — attempting reconnect")
                 self._laser.reconnect()
+
+            elif state in _IDLE_STATES:
+                # Machine is idle but a home is still useful — e.g. after a
+                # board reset, power-on, or just to confirm position is known.
+                debug_print("Recovery: Idle — sending $H (home)")
+                ok, resp = self._laser.send_command('$H')
+                debug_print(f"Recovery $H -> {resp}")
 
             else:
                 debug_print(f"Recovery: Unknown state '{state}' — sending reset then home")
