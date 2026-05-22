@@ -12,7 +12,7 @@ LED (GPIO 17, physical pin 11)
                            (100 ms on, 100 ms off, 100 ms on, 1.7 s off)
     Camera down          -> long-short pulse every 3 s
                            (500 ms on, 200 ms off, 100 ms on, 2.2 s off)
-    Idle / engraving     -> off
+    Idle / engraving     -> solid ON (all clear)
 
 Recovery Button (GPIO 27, physical pin 13)
   Press to attempt state-aware recovery back to Idle:
@@ -161,7 +161,8 @@ class AlarmIndicator:
 
             # ── Priority 5: All good (idle or engraving) ──────
             else:
-                self._led.off()
+                # Solid ON — everything is healthy
+                self._led.on()
                 self._sleep(0.25)
 
     # ── Recovery button ──────────────────────────────────────
