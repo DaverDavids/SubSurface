@@ -556,7 +556,7 @@
     </div>
 
     <!-- TWITCH SETTINGS -->
-    <div class="card span-2">
+    <div class="card span-1">
         <h3>&#128250; Twitch Integration</h3>
         <p style="font-size:0.78rem; color:#adadb8; margin-bottom:12px;">
             Connects to Twitch Chat via IRC to listen for live subscription events natively.
@@ -585,6 +585,37 @@
         <div class="btn-row">
             <button onclick="saveTwitchSettings()">&#128190; Save &amp; Reconnect</button>
             <span class="save-ok" id="twitch-ok">&#10003; Saved</span>
+        </div>
+    </div>
+
+    <!-- DATE ENGRAVING -->
+    <div class="card span-1">
+        <h3>&#128197; Date Engraving</h3>
+        <p style="font-size:0.78rem;color:#adadb8;margin-bottom:12px;">Engrave a date string into two fixed regions on the board.</p>
+
+        <label style="font-size:0.78rem;color:#adadb8;">Date 1</label>
+        <input type="text" id="date1-text" placeholder="e.g. May 2026" style="margin-bottom:6px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+            <input type="number" id="date1-x1" placeholder="X1" step="0.1">
+            <input type="number" id="date1-y1" placeholder="Y1" step="0.1">
+            <input type="number" id="date1-x2" placeholder="X2" step="0.1">
+            <input type="number" id="date1-y2" placeholder="Y2" step="0.1">
+        </div>
+        <button onclick="engraveDate(1)" style="margin-bottom:16px;">&#9889; Engrave Date 1</button>
+
+        <label style="font-size:0.78rem;color:#adadb8;">Date 2</label>
+        <input type="text" id="date2-text" placeholder="e.g. May 2026" style="margin-bottom:6px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+            <input type="number" id="date2-x1" placeholder="X1" step="0.1">
+            <input type="number" id="date2-y1" placeholder="Y1" step="0.1">
+            <input type="number" id="date2-x2" placeholder="X2" step="0.1">
+            <input type="number" id="date2-y2" placeholder="Y2" step="0.1">
+        </div>
+        <button onclick="engraveDate(2)" style="margin-bottom:16px;">&#9889; Engrave Date 2</button>
+
+        <div class="btn-row">
+            <button onclick="saveDateSettings()">&#128190; Save</button>
+            <span class="save-ok" id="date-ok">&#10003; Saved</span>
         </div>
     </div>
 
@@ -917,6 +948,56 @@ async function reconnectOBS() {
     log('Reconnecting OBS...', '#ffa000');
     var r = await api('/api/obs_reconnect', 'POST');
     log('OBS: ' + r.message, r.success ? '#00c853' : '#e91916');
+}
+
+// DATE ENGRAVING
+async function loadDateSettings() {
+    var d = await api('/api/date_config');
+    if (!d) return;
+    document.getElementById('date1-text').value = d.date1_text || '';
+    document.getElementById('date1-x1').value   = d.date1_x1  || '';
+    document.getElementById('date1-y1').value   = d.date1_y1  || '';
+    document.getElementById('date1-x2').value   = d.date1_x2  || '';
+    document.getElementById('date1-y2').value   = d.date1_y2  || '';
+    document.getElementById('date2-text').value = d.date2_text || '';
+    document.getElementById('date2-x1').value   = d.date2_x1  || '';
+    document.getElementById('date2-y1').value   = d.date2_y1  || '';
+    document.getElementById('date2-x2').value   = d.date2_x2  || '';
+    document.getElementById('date2-y2').value   = d.date2_y2  || '';
+}
+async function saveDateSettings() {
+    var body = {
+        date1_text: document.getElementById('date1-text').value,
+        date1_x1:   parseFloat(document.getElementById('date1-x1').value) || 0,
+        date1_y1:   parseFloat(document.getElementById('date1-y1').value) || 0,
+        date1_x2:   parseFloat(document.getElementById('date1-x2').value) || 0,
+        date1_y2:   parseFloat(document.getElementById('date1-y2').value) || 0,
+        date2_text: document.getElementById('date2-text').value,
+        date2_x1:   parseFloat(document.getElementById('date2-x1').value) || 0,
+        date2_y1:   parseFloat(document.getElementById('date2-y1').value) || 0,
+        date2_x2:   parseFloat(document.getElementById('date2-x2').value) || 0,
+        date2_y2:   parseFloat(document.getElementById('date2-y2').value) || 0,
+    };
+    var r = await api('/api/date_config', 'POST', body);
+    if (r.success) { flashOk('date-ok'); log('Date settings saved', '#00c853'); }
+    else log('Date save failed: ' + r.message, '#e91916');
+}
+async function engraveDate(n) {
+    var text = document.getElementById('date'+n+'-text').value.trim();
+    if (!text) { log('Date '+n+' text is empty', '#e91916'); return; }
+    var body = {
+        name: text,
+        source: 'manual',
+        override_rect: {
+            x1: parseFloat(document.getElementById('date'+n+'-x1').value) || 0,
+            y1: parseFloat(document.getElementById('date'+n+'-y1').value) || 0,
+            x2: parseFloat(document.getElementById('date'+n+'-x2').value) || 0,
+            y2: parseFloat(document.getElementById('date'+n+'-y2').value) || 0,
+        }
+    };
+    var r = await api('/api/engrave', 'POST', body);
+    if (r.success) log('Date '+n+' queued: ' + text, '#00c853');
+    else log('Date '+n+' engrave failed: ' + r.message, '#e91916');
 }
 
 // JOGGING AND AXIS CONTROLS
@@ -1295,6 +1376,7 @@ window.addEventListener('DOMContentLoaded',async function(){
     await loadWorkArea();
     await loadOBSSettings();
     await loadTwitchSettings();
+    await loadDateSettings();
     await loadGpioSettings();
     reloadCamera();
     await updateStatus();

@@ -436,6 +436,21 @@ def twitch_reconnect():
     return jsonify({'success': ok, 'running': twitch.is_running(),
                     'message': 'Reconnecting…' if ok else 'Reconnect failed'})
 
+# ── Date Config ───────────────────────────────────────────
+@app.route('/api/date_config', methods=['GET'])
+def get_date_config():
+    keys = ['date1_text','date1_x1','date1_y1','date1_x2','date1_y2',
+            'date2_text','date2_x1','date2_y1','date2_x2','date2_y2']
+    return jsonify({k: config.get('date_engraving.' + k, '') for k in keys})
+
+@app.route('/api/date_config', methods=['POST'])
+def set_date_config():
+    data = request.get_json()
+    for k, v in data.items():
+        config.set('date_engraving.' + k, v)
+    config.save()
+    return jsonify({'success': True})
+
 @app.route('/api/jobs', methods=['GET'])
 def get_jobs():
     return jsonify({'jobs': job_mgr.get_jobs()})
