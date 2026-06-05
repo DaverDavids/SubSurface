@@ -1,99 +1,8 @@
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
-
-# I want to implement 2 and 3 as options, but they will be applied to different fonts independently. Create a new page in the web UI for font setup. We can drag fonts into that page to add them to the list, then the list has the kerning and scale parameters, and then has an input field and shows a preview of that field's text in the font with the settings below or next to it. Push this to github
-
-I've hit the tool limit for this turn before I could push. Let me give you the full implementation plan and all the code so you can apply it, and I'll push it next turn.
-
-Here's everything needed — 3 files to create/update:
-
-***
-
-## Changes Overview
-
-1. **`gcode_generator.py`** — add `x_scale` / `tracking_scale` per-font, loaded from `config['font_profiles']`
-2. **`web_server.py`** — add 3 new API endpoints: `GET/POST /api/font_profiles`, `POST /api/fonts/upload`, `POST /api/fonts/delete`
-3. **`templates/fonts.html`** — new page with drag-drop upload, font table with sliders, live canvas preview
-
-***
-
-### `web_server.py` additions (paste before `run_server`):
-
-```python
-# ── Font profiles (x_scale / tracking_scale per font) ─────────
-@app.route('/api/font_profiles', methods=['GET', 'POST'])
-def font_profiles():
-    if request.method == 'POST':
-        data = request.json or {}
-        font_key = data.get('font_key')
-        if not font_key:
-            return jsonify({'success': False, 'message': 'font_key required'}), 400
-        from gcode_generator import set_font_profile_overrides, FONT_PROFILES
-        if font_key not in FONT_PROFILES:
-            return jsonify({'success': False, 'message': 'Unknown font key'}), 404
-        set_font_profile_overrides(
-            font_key,
-            x_scale=data.get('x_scale'),
-            tracking_scale=data.get('tracking_scale')
-        )
-        return jsonify({'success': True})
-
-    from gcode_generator import FONT_PROFILES, get_font_profile_overrides
-    result = []
-    for key, profile in FONT_PROFILES.items():
-        overrides = get_font_profile_overrides(key)
-        result.append({
-            'key':             key,
-            'label':           profile[0],
-            'path':            profile[3],
-            'x_scale':         overrides['x_scale'],
-            'tracking_scale':  overrides['tracking_scale'],
-        })
-    return jsonify(result)
-
-
-@app.route('/api/fonts/upload', methods=['POST'])
-def upload_font():
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': 'No file provided'}), 400
-    f = request.files['file']
-    if not f.filename.lower().endswith('.ttf'):
-        return jsonify({'success': False, 'message': 'Only .ttf files accepted'}), 400
-    os.makedirs('fonts', exist_ok=True)
-    save_path = os.path.join('fonts', f.filename)
-    f.save(save_path)
-    # Refresh FONT_PROFILES
-    import gcode_generator
-    gcode_generator.FONT_PROFILES = gcode_generator._scan_for_fonts()
-    return jsonify({'success': True, 'message': f'Uploaded {f.filename}'})
-
-
-@app.route('/api/fonts/delete', methods=['POST'])
-def delete_font():
-    data = request.json or {}
-    font_key = data.get('font_key', '')
-    import gcode_generator
-    profile = gcode_generator.FONT_PROFILES.get(font_key)
-    if not profile:
-        return jsonify({'success': False, 'message': 'Font not found'}), 404
-    path = profile[3]
-    if os.path.exists(path):
-        os.remove(path)
-    gcode_generator.FONT_PROFILES = gcode_generator._scan_for_fonts()
-    return jsonify({'success': True})
-```
-
-
-***
-
-### `templates/fonts.html` — full new page:
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Font Setup – SubSurface</title>
-  <link rel="stylesheet" href="/static/style.css">
   <style>
     body { font-family: sans-serif; background: #1a1a2e; color: #eee; margin: 0; }
     nav { background: #16213e; padding: 0.75rem 1.5rem; display: flex; gap: 1.5rem; align-items: center; }
@@ -102,7 +11,6 @@ def delete_font():
     .page { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
     h1 { font-size: 1.6rem; margin-bottom: 1.5rem; }
 
-    /* Drop Zone */
     #dropzone {
       border: 2px dashed #4a5568; border-radius: 10px; padding: 2.5rem;
       text-align: center; margin-bottom: 2rem; cursor: pointer;
@@ -113,7 +21,6 @@ def delete_font():
     #dropzone p { margin: 0; color: #a0aec0; }
     #dropzone .hint { font-size: 0.8rem; margin-top: 0.4rem; color: #718096; }
 
-    /* Font table */
     table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
     th { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid #2d3748;
          font-size: 0.8rem; text-transform: uppercase; color: #718096; }
@@ -130,7 +37,6 @@ def delete_font():
     .save-indicator { font-size: 0.75rem; color: #68d391; opacity: 0; transition: opacity 0.5s; margin-left: 0.5rem; }
     .save-indicator.show { opacity: 1; }
 
-    /* Preview panel */
     #preview-section { background: #16213e; border-radius: 10px; padding: 1.5rem; }
     #preview-section h2 { font-size: 1rem; margin: 0 0 1rem; color: #a0aec0; }
     .preview-controls { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
@@ -151,20 +57,17 @@ def delete_font():
 <nav>
   <a href="/">Dashboard</a>
   <a href="/fonts" class="active">Fonts</a>
-  <a href="/settings">Settings</a>
 </nav>
 
 <div class="page">
   <h1>Font Setup</h1>
 
-  <!-- Drop zone -->
   <div id="dropzone">
     <p>⬆ Drag &amp; drop .ttf files here, or click to browse</p>
     <p class="hint">Fonts are stored in the <code>fonts/</code> directory on the server</p>
     <input type="file" id="file-input" accept=".ttf" multiple style="display:none">
   </div>
 
-  <!-- Font table -->
   <div id="font-table-wrap">
     <table id="font-table">
       <thead>
@@ -182,7 +85,6 @@ def delete_font():
     </div>
   </div>
 
-  <!-- Preview -->
   <div id="preview-section">
     <h2>Live Preview</h2>
     <div class="preview-controls">
@@ -196,7 +98,6 @@ def delete_font():
 <script>
 const saveTimers = {};
 
-// ── Load font list ────────────────────────────────────────────
 async function loadFonts() {
   const res = await fetch('/api/font_profiles');
   const fonts = await res.json();
@@ -214,7 +115,6 @@ async function loadFonts() {
   noFonts.style.display = 'none';
 
   fonts.forEach(f => {
-    // Table row
     const tr = document.createElement('tr');
     tr.dataset.key = f.key;
     tr.innerHTML = `
@@ -239,14 +139,12 @@ async function loadFonts() {
     `;
     tbody.appendChild(tr);
 
-    // Preview dropdown option
     const opt = document.createElement('option');
     opt.value = f.key;
     opt.textContent = f.label;
     previewSel.appendChild(opt);
   });
 
-  // Slider events
   tbody.querySelectorAll('input[type=range]').forEach(slider => {
     slider.addEventListener('input', e => {
       const val = parseFloat(e.target.value).toFixed(2);
@@ -258,7 +156,6 @@ async function loadFonts() {
     });
   });
 
-  // Delete buttons
   tbody.querySelectorAll('.btn-del').forEach(btn => {
     btn.addEventListener('click', async e => {
       const key = e.target.dataset.key;
@@ -275,7 +172,6 @@ async function loadFonts() {
   schedulePreviewUpdate();
 }
 
-// ── Save a single param ────────────────────────────────────────
 async function saveParam(fontKey, param, value) {
   const indicatorId = param === 'x_scale' ? `si-x-${fontKey}` : `si-t-${fontKey}`;
   await fetch('/api/font_profiles', {
@@ -290,7 +186,6 @@ async function saveParam(fontKey, param, value) {
   }
 }
 
-// ── Canvas preview ─────────────────────────────────────────────
 let previewTimer = null;
 function schedulePreviewUpdate() {
   clearTimeout(previewTimer);
@@ -303,7 +198,6 @@ function renderPreview() {
   const text = document.getElementById('preview-text').value || 'Preview';
   const selectedKey = document.getElementById('preview-font').value;
 
-  // Find sliders for this font
   const xSlider = document.querySelector(`input[data-key="${selectedKey}"][data-param="x_scale"]`);
   const tSlider = document.querySelector(`input[data-key="${selectedKey}"][data-param="tracking_scale"]`);
 
@@ -319,27 +213,21 @@ function renderPreview() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
-  // Base font size
   const baseSize = H * 0.65;
   ctx.save();
   ctx.translate(W / 2, H / 2 + baseSize * 0.35);
 
-  // Apply x_scale as horizontal squish
   ctx.scale(xScale, 1.0);
 
-  // Measure and apply tracking
   ctx.font = `${baseSize}px sans-serif`;
 
-  // Draw chars individually with tracking
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'alphabetic';
 
-  // Measure total width with tracking
   let totalW = 0;
   const chars = [...text];
   const widths = chars.map(c => ctx.measureText(c).width * trackingScale);
   totalW = widths.reduce((a, b) => a + b, 0);
-  // Last char should use natural width (no extra tracking gap after it)
   if (chars.length > 1) {
     totalW -= widths[widths.length - 1] * (1 - 1 / trackingScale);
   }
@@ -352,13 +240,11 @@ function renderPreview() {
 
   ctx.restore();
 
-  // Labels
   ctx.fillStyle = '#4a5568';
   ctx.font = '11px monospace';
   ctx.fillText(`x_scale: ${xScale.toFixed(2)}  tracking: ${trackingScale.toFixed(2)}`, 8, H - 8);
 }
 
-// ── Upload handling ────────────────────────────────────────────
 async function uploadFile(file) {
   if (!file.name.toLowerCase().endsWith('.ttf')) {
     alert('Only .ttf files are accepted.');
@@ -386,34 +272,11 @@ dz.addEventListener('drop', e => {
   [...e.dataTransfer.files].forEach(uploadFile);
 });
 
-// ── Preview controls ───────────────────────────────────────────
 document.getElementById('preview-text').addEventListener('input', schedulePreviewUpdate);
 document.getElementById('preview-font').addEventListener('change', schedulePreviewUpdate);
 window.addEventListener('resize', schedulePreviewUpdate);
 
-// ── Init ──────────────────────────────────────────────────────
 loadFonts();
 </script>
 </body>
 </html>
-```
-
-Then add a route to `web_server.py`:
-
-```python
-@app.route('/fonts')
-def fonts_page():
-    return render_template('fonts.html')
-```
-
-And add the nav link to `index.html`:
-
-```html
-<a href="/fonts">Fonts</a>
-```
-
-
-***
-
-The next turn I'll push all of this directly to GitHub in one commit. The implementation is fully ready — just paste the above or let me push it.
-

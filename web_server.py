@@ -529,5 +529,72 @@ def video_feed():
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+# ── Font profiles (x_scale / tracking_scale per font) ─────────
+@app.route('/api/font_profiles', methods=['GET', 'POST'])
+def font_profiles():
+    if request.method == 'POST':
+        data = request.json or {}
+        font_key = data.get('font_key')
+        if not font_key:
+            return jsonify({'success': False, 'message': 'font_key required'}), 400
+        from gcode_generator import set_font_profile_overrides, FONT_PROFILES
+        if font_key not in FONT_PROFILES:
+            return jsonify({'success': False, 'message': 'Unknown font key'}), 404
+        set_font_profile_overrides(
+            font_key,
+            x_scale=data.get('x_scale'),
+            tracking_scale=data.get('tracking_scale')
+        )
+        return jsonify({'success': True})
+
+    from gcode_generator import FONT_PROFILES, get_font_profile_overrides
+    result = []
+    for key, profile in FONT_PROFILES.items():
+        overrides = get_font_profile_overrides(key)
+        result.append({
+            'key':             key,
+            'label':           profile[0],
+            'path':            profile[3],
+            'x_scale':         overrides['x_scale'],
+            'tracking_scale':  overrides['tracking_scale'],
+        })
+    return jsonify(result)
+
+
+@app.route('/api/fonts/upload', methods=['POST'])
+def upload_font():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file provided'}), 400
+    f = request.files['file']
+    if not f.filename.lower().endswith('.ttf'):
+        return jsonify({'success': False, 'message': 'Only .ttf files accepted'}), 400
+    os.makedirs('fonts', exist_ok=True)
+    save_path = os.path.join('fonts', f.filename)
+    f.save(save_path)
+    import gcode_generator
+    gcode_generator.FONT_PROFILES = gcode_generator._scan_for_fonts()
+    return jsonify({'success': True, 'message': f'Uploaded {f.filename}'})
+
+
+@app.route('/api/fonts/delete', methods=['POST'])
+def delete_font():
+    data = request.json or {}
+    font_key = data.get('font_key', '')
+    import gcode_generator
+    profile = gcode_generator.FONT_PROFILES.get(font_key)
+    if not profile:
+        return jsonify({'success': False, 'message': 'Font not found'}), 404
+    path = profile[3]
+    if os.path.exists(path):
+        os.remove(path)
+    gcode_generator.FONT_PROFILES = gcode_generator._scan_for_fonts()
+    return jsonify({'success': True})
+
+
+@app.route('/fonts')
+def fonts_page():
+    return render_template('fonts.html')
+
+
 def run_server(host='0.0.0.0', port=5000):
     app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)

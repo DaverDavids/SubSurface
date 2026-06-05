@@ -204,6 +204,11 @@ class GCodeGenerator:
             self.engine = 'ttf'
             new_ttf_path = 'fonts/none.ttf'
 
+        # Load per-font overrides
+        overrides = get_font_profile_overrides(self.font_key)
+        self.x_scale = overrides['x_scale']
+        self.tracking_scale = overrides['tracking_scale']
+
         # If font changed, clear cache and trigger reload
         if self._current_font_path != new_ttf_path:
             debug_print(f"Font path change detected! Purging cache. Old: {self._current_font_path}, New: {new_ttf_path}")
@@ -369,7 +374,7 @@ class GCodeGenerator:
                     if ep[0] < min_x: min_x = ep[0]
                     commands.append((op, cp1, cp2, ep))
                     
-            cursor_x += advance
+            cursor_x += advance * self.tracking_scale
 
         if not valid_chars_found:
             debug_print(f"WARNING: The font '{self.font_key}' generated no visible contours for the text '{text}'.")
@@ -597,7 +602,7 @@ class GCodeGenerator:
 
         def _tx(pt, norm_vec, amt, bx, by):
             # Scale raw FreeType points and SHIFT them so that min_x starts exactly at 0
-            mx = (pt[0] - min_x_raw) * active_scale
+            mx = (pt[0] - min_x_raw) * active_scale * self.x_scale
             my = (pt[1] - min_y_raw) * active_scale
             
             if mirror_y:
@@ -687,3 +692,19 @@ class GCodeGenerator:
         ])
 
         return "\n".join(gcode)
+
+
+# ── Per-font overrides (x_scale / tracking_scale) ──────────
+def get_font_profile_overrides(font_key):
+    return {
+        'x_scale': float(config.get(f'font_profiles.{font_key}.x_scale', 1.0)),
+        'tracking_scale': float(config.get(f'font_profiles.{font_key}.tracking_scale', 1.0)),
+    }
+
+
+def set_font_profile_overrides(font_key, x_scale=None, tracking_scale=None):
+    if x_scale is not None:
+        config.set(f'font_profiles.{font_key}.x_scale', x_scale)
+    if tracking_scale is not None:
+        config.set(f'font_profiles.{font_key}.tracking_scale', tracking_scale)
+    config.save()
