@@ -97,6 +97,7 @@
 
 <script>
 const saveTimers = {};
+const loadedFonts = {};
 
 async function loadFonts() {
   const res = await fetch('/api/font_profiles');
@@ -117,6 +118,7 @@ async function loadFonts() {
   fonts.forEach(f => {
     const tr = document.createElement('tr');
     tr.dataset.key = f.key;
+    const fontName = 'fnt-' + f.key;
     tr.innerHTML = `
       <td><strong>${f.label}</strong><br><small style="color:#718096">${f.key}</small></td>
       <td>
@@ -143,6 +145,20 @@ async function loadFonts() {
     opt.value = f.key;
     opt.textContent = f.label;
     previewSel.appendChild(opt);
+
+    // Load the actual TTF font for canvas preview
+    const filename = f.path.replace(/\\/g, '/').split('/').pop();
+    const fontUrl = '/font_file/' + encodeURIComponent(filename);
+    if (!loadedFonts[fontName]) {
+      try {
+        const fontFace = new FontFace(fontName, 'url(' + fontUrl + ')');
+        const loaded = await fontFace.load();
+        document.fonts.add(loaded);
+        loadedFonts[fontName] = true;
+      } catch(e) {
+        console.warn('Failed to load font ' + f.key, e);
+      }
+    }
   });
 
   tbody.querySelectorAll('input[type=range]').forEach(slider => {
@@ -219,7 +235,8 @@ function renderPreview() {
 
   ctx.scale(xScale, 1.0);
 
-  ctx.font = `${baseSize}px sans-serif`;
+  const fontName = 'fnt-' + selectedKey;
+  ctx.font = `${baseSize}px ${fontName}`;
 
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'alphabetic';

@@ -596,5 +596,11 @@ def fonts_page():
     return render_template('fonts.html')
 
 
+@app.route('/font_file/<path:filename>')
+def serve_font_file(filename):
+    from flask import send_from_directory
+    return send_from_directory('fonts', filename)
+
+
 def run_server(host='0.0.0.0', port=5000):
     app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
