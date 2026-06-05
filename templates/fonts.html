@@ -115,7 +115,7 @@ async function loadFonts() {
   }
   noFonts.style.display = 'none';
 
-  fonts.forEach(f => {
+  for (const f of fonts) {
     const tr = document.createElement('tr');
     tr.dataset.key = f.key;
     const fontName = 'fnt-' + f.key;
@@ -159,7 +159,7 @@ async function loadFonts() {
         console.warn('Failed to load font ' + f.key, e);
       }
     }
-  });
+  }
 
   tbody.querySelectorAll('input[type=range]').forEach(slider => {
     slider.addEventListener('input', e => {
