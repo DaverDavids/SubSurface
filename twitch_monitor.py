@@ -90,7 +90,7 @@ class TwitchMonitor:
                                 
                                 msg_id = tags.get('msg-id')
                                 
-                                # Standard sub or resub
+                                # Standard new sub or resub
                                 if msg_id in ('sub', 'resub'):
                                     user = tags.get('display-name', 'Unknown')
                                     debug_print(f"Twitch IRC: Sub/Resub detected -> {user}")
@@ -105,18 +105,44 @@ class TwitchMonitor:
                                         if self.enqueue_callback:
                                             self.enqueue_callback(recipient, 'Gifted Sub')
                                             
-                                # Bulk gift summary event (Ignore this! The 'subgift' handles individual recipients)
+                                # Bulk gift summary event (Ignore! 'subgift' handles individual recipients)
                                 elif msg_id == 'submysterygift':
                                     gifter = tags.get('display-name', 'Unknown')
                                     count = tags.get('msg-param-mass-gift-count', '0')
                                     debug_print(f"Twitch IRC: {gifter} is gifting {count} subs (Ignoring summary event)")
-                                    # Gift sub upgrade to paid (continuing a gifted sub)
+
+                                # Gifted sub recipient chose to continue paying after gift expired
                                 elif msg_id == 'giftpaidupgrade':
                                     user = tags.get('display-name', 'Unknown')
                                     gifter = tags.get('msg-param-sender-name', 'Unknown')
                                     debug_print(f"Twitch IRC: Gift sub upgrade -> {user} (originally from {gifter})")
                                     if self.enqueue_callback:
-                                        self.enqueue_callback(user, 'Subscription')  # treat same as a sub
+                                        self.enqueue_callback(user, 'Subscription')
+
+                                # Amazon Prime sub converted to a paid recurring sub
+                                elif msg_id == 'primepaidupgrade':
+                                    user = tags.get('display-name', 'Unknown')
+                                    debug_print(f"Twitch IRC: Prime-to-paid upgrade -> {user}")
+                                    if self.enqueue_callback:
+                                        self.enqueue_callback(user, 'Subscription')
+
+                                # User pays forward their gifted sub to a random viewer
+                                elif msg_id == 'standardpayforward':
+                                    recipient = tags.get('msg-param-recipient-display-name')
+                                    gifter = tags.get('display-name', 'Unknown')
+                                    if recipient:
+                                        debug_print(f"Twitch IRC: Pay-forward gift -> {recipient} (from {gifter})")
+                                        if self.enqueue_callback:
+                                            self.enqueue_callback(recipient, 'Gifted Sub')
+
+                                # Community pay-forward: gifted sub paid forward to a specific user
+                                elif msg_id == 'communitypayforward':
+                                    recipient = tags.get('msg-param-recipient-display-name')
+                                    gifter = tags.get('display-name', 'Unknown')
+                                    if recipient:
+                                        debug_print(f"Twitch IRC: Community pay-forward -> {recipient} (from {gifter})")
+                                        if self.enqueue_callback:
+                                            self.enqueue_callback(recipient, 'Gifted Sub')
 
             except Exception as e:
                 debug_print(f"Twitch IRC error: {e}")
