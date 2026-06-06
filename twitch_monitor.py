@@ -110,6 +110,13 @@ class TwitchMonitor:
                                     gifter = tags.get('display-name', 'Unknown')
                                     count = tags.get('msg-param-mass-gift-count', '0')
                                     debug_print(f"Twitch IRC: {gifter} is gifting {count} subs (Ignoring summary event)")
+                                    # Gift sub upgrade to paid (continuing a gifted sub)
+                                elif msg_id == 'giftpaidupgrade':
+                                    user = tags.get('display-name', 'Unknown')
+                                    gifter = tags.get('msg-param-sender-name', 'Unknown')
+                                    debug_print(f"Twitch IRC: Gift sub upgrade -> {user} (originally from {gifter})")
+                                    if self.enqueue_callback:
+                                        self.enqueue_callback(user, 'Subscription')  # treat same as a sub
 
             except Exception as e:
                 debug_print(f"Twitch IRC error: {e}")
