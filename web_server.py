@@ -172,7 +172,7 @@ def camera_settings():
                 if key != 'auto_exposure' and key in data:
                     controls.append(f"{v4l2_name}={int(data[key])}")
             if controls:
-                cmd = ['v4l2-ctl', f'--device={device}',
+                cmd = ['/usr/bin/v4l2-ctl', f'--device={device}',
                        '--set-ctrl=' + ','.join(controls)]
                 debug_print(f"v4l2-ctl: {' '.join(cmd)}")
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
