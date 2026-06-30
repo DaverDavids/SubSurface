@@ -153,24 +153,24 @@ class CameraStream:
                 time.sleep(1)
 
     def apply_settings(self, settings):
-        """Apply visual camera settings via v4l2-ctl (bypasses broken OpenCV property mapping)."""
+        """Apply visual camera settings via v4l2-ctl."""
         import subprocess
 
         v4l2_map = {
-            'brightness':    'brightness',
-            'contrast':      'contrast',
-            'saturation':    'saturation',
-            'hue':           'hue',
-            'sharpness':     'sharpness',
+            'brightness':  'brightness',
+            'contrast':    'contrast',
+            'saturation':  'saturation',
+            'hue':         'hue',
+            'sharpness':   'sharpness',
             'auto_exposure': 'auto_exposure',
-            'exposure':      'exposure_time_absolute',
+            'exposure':    'exposure_time_absolute',
         }
 
         device = f"/dev/video{self.camera_index}"
         controls = []
 
         if 'auto_exposure' in settings:
-            controls.insert(0, f"auto_exposure={int(settings['auto_exposure'])}")
+            controls.append(f"auto_exposure={int(settings['auto_exposure'])}")
 
         for key, v4l2_name in v4l2_map.items():
             if key == 'auto_exposure':
@@ -191,7 +191,7 @@ class CameraStream:
                 return False
             return True
         except FileNotFoundError:
-            debug_print("v4l2-ctl not found — install with: sudo apt install v4l-utils")
+            debug_print("v4l2-ctl not found — sudo apt install v4l-utils")
             return False
         except Exception as e:
             debug_print(f"v4l2-ctl exception: {e}")
