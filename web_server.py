@@ -153,8 +153,18 @@ def camera_settings():
     if request.method == 'POST':
         data = request.json or {}
         config.set('camera_settings', data)
-        if camera:
-            camera.apply_settings(data)
+        try:
+            from camera_stream import CameraStream
+            _tmp = object.__new__(CameraStream)
+            _tmp.camera_index = 0
+            import os, subprocess
+            if os.path.exists('/dev/webcam0'):
+                rp = subprocess.check_output(['realpath', '/dev/webcam0']).decode().strip()
+                if rp.startswith('/dev/video'):
+                    _tmp.camera_index = int(rp.replace('/dev/video', ''))
+            _tmp.apply_settings(data)
+        except Exception as e:
+            debug_print(f"camera_settings apply error: {e}")
         return jsonify({'success': True})
     return jsonify(config.get('camera_settings', {}))
 
