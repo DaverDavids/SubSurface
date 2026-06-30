@@ -153,27 +153,49 @@ class CameraStream:
                 time.sleep(1)
 
     def apply_settings(self, settings):
-        """Apply visual camera settings via OpenCV V4L2 properties."""
-        if not self.camera or not self.camera.isOpened():
-            return False
-        # auto_exposure must be set first — it gates whether exposure is writable
-        if 'auto_exposure' in settings:
-            self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, float(settings['auto_exposure']))
-            debug_print(f"Camera auto_exposure = {settings['auto_exposure']}")
+        """Apply visual camera settings via v4l2-ctl (bypasses broken OpenCV property mapping)."""
+        import subprocess
 
-        prop_map = {
-            'brightness':  cv2.CAP_PROP_BRIGHTNESS,
-            'contrast':    cv2.CAP_PROP_CONTRAST,
-            'saturation':  cv2.CAP_PROP_SATURATION,
-            'hue':         cv2.CAP_PROP_HUE,
-            'sharpness':   cv2.CAP_PROP_SHARPNESS,
-            'exposure':    cv2.CAP_PROP_EXPOSURE,
+        v4l2_map = {
+            'brightness':    'brightness',
+            'contrast':      'contrast',
+            'saturation':    'saturation',
+            'hue':           'hue',
+            'sharpness':     'sharpness',
+            'auto_exposure': 'auto_exposure',
+            'exposure':      'exposure_time_absolute',
         }
-        for key, prop in prop_map.items():
+
+        device = f"/dev/video{self.camera_index}"
+        controls = []
+
+        if 'auto_exposure' in settings:
+            controls.insert(0, f"auto_exposure={int(settings['auto_exposure'])}")
+
+        for key, v4l2_name in v4l2_map.items():
+            if key == 'auto_exposure':
+                continue
             if key in settings:
-                self.camera.set(prop, float(settings[key]))
-                debug_print(f"Camera {key} = {settings[key]}")
-        return True
+                controls.append(f"{v4l2_name}={int(settings[key])}")
+
+        if not controls:
+            return True
+
+        cmd = ['v4l2-ctl', f'--device={device}', '--set-ctrl=' + ','.join(controls)]
+        debug_print(f"v4l2-ctl: {' '.join(cmd)}")
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if result.returncode != 0:
+                debug_print(f"v4l2-ctl error: {result.stderr.strip()}")
+                return False
+            return True
+        except FileNotFoundError:
+            debug_print("v4l2-ctl not found — install with: sudo apt install v4l-utils")
+            return False
+        except Exception as e:
+            debug_print(f"v4l2-ctl exception: {e}")
+            return False
 
     def get_frame(self):
         """Get latest frame as JPEG bytes"""
