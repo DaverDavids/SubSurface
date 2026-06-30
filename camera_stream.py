@@ -90,16 +90,20 @@ class CameraStream:
                 debug_print("Failed to find any working cameras entirely. Check /dev/video* permissions or physical connection.")
                 return False
 
-            # Request MJPG format from the camera if available, drastically improves FPS on Pi USB
+            from config import config as _cfg
+            saved_cam = _cfg.get('camera_settings', {})
+
+            # 1. Auto-exposure FIRST — must be set before format negotiation
+            if saved_cam.get('auto_exposure') is not None:
+                self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, float(saved_cam['auto_exposure']))
+
+            # 2. Format + resolution
             self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-            
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
             self.camera.set(cv2.CAP_PROP_FPS, self.fps)
 
-            # Apply saved visual settings if present
-            from config import config as _cfg
-            saved_cam = _cfg.get('camera_settings')
+            # 3. All other visual controls after format is locked in
             if saved_cam:
                 self.apply_settings(saved_cam)
 
@@ -152,14 +156,18 @@ class CameraStream:
         """Apply visual camera settings via OpenCV V4L2 properties."""
         if not self.camera or not self.camera.isOpened():
             return False
+        # auto_exposure must be set first — it gates whether exposure is writable
+        if 'auto_exposure' in settings:
+            self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, float(settings['auto_exposure']))
+            debug_print(f"Camera auto_exposure = {settings['auto_exposure']}")
+
         prop_map = {
-            'brightness':    cv2.CAP_PROP_BRIGHTNESS,
-            'contrast':      cv2.CAP_PROP_CONTRAST,
-            'saturation':    cv2.CAP_PROP_SATURATION,
-            'hue':           cv2.CAP_PROP_HUE,
-            'sharpness':     cv2.CAP_PROP_SHARPNESS,
-            'auto_exposure': cv2.CAP_PROP_AUTO_EXPOSURE,
-            'exposure':      cv2.CAP_PROP_EXPOSURE,
+            'brightness':  cv2.CAP_PROP_BRIGHTNESS,
+            'contrast':    cv2.CAP_PROP_CONTRAST,
+            'saturation':  cv2.CAP_PROP_SATURATION,
+            'hue':         cv2.CAP_PROP_HUE,
+            'sharpness':   cv2.CAP_PROP_SHARPNESS,
+            'exposure':    cv2.CAP_PROP_EXPOSURE,
         }
         for key, prop in prop_map.items():
             if key in settings:

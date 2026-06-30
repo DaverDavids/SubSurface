@@ -154,7 +154,10 @@ def camera_settings():
         data = request.json or {}
         config.set('camera_settings', data)
         if camera:
+            camera.stop()
             camera.apply_settings(data)
+            if not camera.is_running():
+                camera.start()
         return jsonify({'success': True})
     return jsonify(config.get('camera_settings', {}))
 
