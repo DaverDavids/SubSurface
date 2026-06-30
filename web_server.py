@@ -155,10 +155,7 @@ def camera_settings():
         config.set('camera_settings', data)
         try:
             import subprocess, os
-            device = '/dev/webcam0'
-            if os.path.exists('/dev/webcam0'):
-                device = subprocess.check_output(
-                    ['realpath', '/dev/webcam0']).decode().strip()
+            device = os.path.realpath('/dev/webcam0') if os.path.exists('/dev/webcam0') else '/dev/video0'
             v4l2_map = {
                 'brightness':    'brightness',
                 'contrast':      'contrast',
