@@ -154,17 +154,35 @@ def camera_settings():
         data = request.json or {}
         config.set('camera_settings', data)
         try:
-            from camera_stream import CameraStream
-            _tmp = object.__new__(CameraStream)
-            _tmp.camera_index = 0
-            import os, subprocess
+            import subprocess, os
+            device = '/dev/webcam0'
             if os.path.exists('/dev/webcam0'):
-                rp = subprocess.check_output(['realpath', '/dev/webcam0']).decode().strip()
-                if rp.startswith('/dev/video'):
-                    _tmp.camera_index = int(rp.replace('/dev/video', ''))
-            _tmp.apply_settings(data)
+                device = subprocess.check_output(
+                    ['realpath', '/dev/webcam0']).decode().strip()
+            v4l2_map = {
+                'brightness':    'brightness',
+                'contrast':      'contrast',
+                'saturation':    'saturation',
+                'hue':           'hue',
+                'sharpness':     'sharpness',
+                'auto_exposure': 'auto_exposure',
+                'exposure':      'exposure_time_absolute',
+            }
+            controls = []
+            if 'auto_exposure' in data:
+                controls.append(f"auto_exposure={int(data['auto_exposure'])}")
+            for key, v4l2_name in v4l2_map.items():
+                if key != 'auto_exposure' and key in data:
+                    controls.append(f"{v4l2_name}={int(data[key])}")
+            if controls:
+                cmd = ['v4l2-ctl', f'--device={device}',
+                       '--set-ctrl=' + ','.join(controls)]
+                debug_print(f"v4l2-ctl: {' '.join(cmd)}")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+                if result.returncode != 0:
+                    debug_print(f"v4l2-ctl error: {result.stderr.strip()}")
         except Exception as e:
-            debug_print(f"camera_settings apply error: {e}")
+            debug_print(f"camera_settings error: {e}")
         return jsonify({'success': True})
     return jsonify(config.get('camera_settings', {}))
 
