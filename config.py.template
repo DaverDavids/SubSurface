@@ -82,6 +82,15 @@ class Config:
                 'username': '',
                 'oauth_token': ''
             },
+            'camera_settings': {
+                'brightness':     128,
+                'contrast':       128,
+                'saturation':     128,
+                'hue':            0,
+                'sharpness':      128,
+                'auto_exposure':  3,
+                'exposure':       166,
+            },
             'camera_enabled':          True,
             'fluidnc_connection':      'network',
             'serial_port':             '/dev/ttyUSB0',

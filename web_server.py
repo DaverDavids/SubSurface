@@ -147,6 +147,18 @@ def gpio_config():
                                ' No service restart needed.'})
 
 
+# ── Camera settings ────────────────────────────────────────
+@app.route('/api/camera_settings', methods=['GET', 'POST'])
+def camera_settings():
+    if request.method == 'POST':
+        data = request.json or {}
+        config.set('camera_settings', data)
+        if camera:
+            camera.apply_settings(data)
+        return jsonify({'success': True})
+    return jsonify(config.get('camera_settings', {}))
+
+
 # ── Font list ──────────────────────────────────────────────
 @app.route('/api/fonts')
 def get_fonts():

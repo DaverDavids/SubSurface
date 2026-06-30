@@ -178,6 +178,22 @@
             font-size: 0.85rem;
             text-align: center;
         }
+        .cam-settings-toggle {
+            background: none; border: 1px solid #3a3a43; border-radius: 4px;
+            color: #adadb8; font-size: 0.72rem; padding: 3px 8px; cursor: pointer;
+        }
+        .cam-settings-toggle:hover { background: #2d2d35; color: #efeff1; }
+        .cam-settings-panel {
+            display: none; margin-top: 10px; background: #111;
+            border: 1px solid #2d2d35; border-radius: 6px; padding: 12px;
+        }
+        .cam-settings-panel.open { display: block; }
+        .cam-settings-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px;
+        }
+        .cam-settings-grid label { margin-top: 8px; }
+        .cam-settings-grid label:nth-child(1),
+        .cam-settings-grid label:nth-child(2) { margin-top: 0; }
     </style>
 </head>
 <body>
@@ -325,6 +341,30 @@
             <button class="secondary" id="btn-camera-toggle" onclick="toggleCameraFeed()" style="font-size: 0.75rem; padding: 4px 8px;">&#9211; Disable Feed</button>
         </div>
         <p style="font-size:0.72rem; color:#6b6b78; margin-top:6px; text-align:center;">Disabling the feed stops the browser from fetching the stream, reducing resource usage. The OBS source is unaffected.</p>
+        <div style="margin-top:10px; display:flex; justify-content:flex-end;">
+            <button class="cam-settings-toggle" onclick="toggleCamSettings()">&#9881; Camera Settings</button>
+        </div>
+        <div class="cam-settings-panel" id="cam-settings-panel">
+            <div class="cam-settings-grid">
+                <div><label>Brightness (0–255)</label><input type="number" id="cam-brightness" min="0" max="255" step="1"></div>
+                <div><label>Contrast (0–255)</label><input type="number" id="cam-contrast" min="0" max="255" step="1"></div>
+                <div><label>Saturation (0–255)</label><input type="number" id="cam-saturation" min="0" max="255" step="1"></div>
+                <div><label>Hue (-180–180)</label><input type="number" id="cam-hue" min="-180" max="180" step="1"></div>
+                <div><label>Sharpness (0–255)</label><input type="number" id="cam-sharpness" min="0" max="255" step="1"></div>
+                <div><label>Exposure (manual only)</label><input type="number" id="cam-exposure" min="1" max="10000" step="1"></div>
+                <div style="grid-column:1/-1">
+                    <label>Auto Exposure</label>
+                    <select id="cam-auto-exposure">
+                        <option value="3">Auto</option>
+                        <option value="1">Manual</option>
+                    </select>
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top:10px;">
+                <button onclick="saveCamSettings()" style="font-size:0.8rem; padding:5px 12px;">&#128190; Apply</button>
+                <span class="save-ok" id="cam-ok">&#10003; Applied</span>
+            </div>
+        </div>
     </div>
 
 
@@ -823,6 +863,39 @@ function toggleCameraFeed() {
         reloadCamera();
         log('Camera feed re-enabled in browser', '#00c853');
     }
+}
+
+// CAMERA SETTINGS
+function toggleCamSettings() {
+    document.getElementById('cam-settings-panel').classList.toggle('open');
+}
+
+async function loadCamSettings() {
+    try {
+        var d = await api('/api/camera_settings');
+        setVal('cam-brightness',    d.brightness    !== undefined ? d.brightness    : 128);
+        setVal('cam-contrast',      d.contrast      !== undefined ? d.contrast      : 128);
+        setVal('cam-saturation',    d.saturation    !== undefined ? d.saturation    : 128);
+        setVal('cam-hue',           d.hue           !== undefined ? d.hue           : 0);
+        setVal('cam-sharpness',     d.sharpness     !== undefined ? d.sharpness     : 128);
+        setVal('cam-auto-exposure', d.auto_exposure !== undefined ? d.auto_exposure : 3);
+        setVal('cam-exposure',      d.exposure      !== undefined ? d.exposure      : 166);
+    } catch(e) {}
+}
+
+async function saveCamSettings() {
+    var body = {
+        brightness:    +document.getElementById('cam-brightness').value,
+        contrast:      +document.getElementById('cam-contrast').value,
+        saturation:    +document.getElementById('cam-saturation').value,
+        hue:           +document.getElementById('cam-hue').value,
+        sharpness:     +document.getElementById('cam-sharpness').value,
+        auto_exposure: +document.getElementById('cam-auto-exposure').value,
+        exposure:      +document.getElementById('cam-exposure').value,
+    };
+    var r = await api('/api/camera_settings', 'POST', body);
+    if (r.success) { flashOk('cam-ok'); log('Camera settings applied', '#00c853'); }
+    else log('Camera settings failed', '#e91916');
 }
 
 // FONT DROPDOWN
@@ -1381,6 +1454,7 @@ window.addEventListener('DOMContentLoaded',async function(){
     await loadFonts();
     await loadWorkArea();
     await loadOBSSettings();
+    await loadCamSettings();
     await loadTwitchSettings();
     await loadDateSettings();
     await loadGpioSettings();

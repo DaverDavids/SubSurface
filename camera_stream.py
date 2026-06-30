@@ -97,6 +97,12 @@ class CameraStream:
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
             self.camera.set(cv2.CAP_PROP_FPS, self.fps)
 
+            # Apply saved visual settings if present
+            from config import config as _cfg
+            saved_cam = _cfg.get('camera_settings')
+            if saved_cam:
+                self.apply_settings(saved_cam)
+
             # Read back actual settings
             actual_w = self.camera.get(cv2.CAP_PROP_FRAME_WIDTH)
             actual_h = self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -141,6 +147,25 @@ class CameraStream:
             except Exception as e:
                 debug_print(f"Capture loop error: {e}")
                 time.sleep(1)
+
+    def apply_settings(self, settings):
+        """Apply visual camera settings via OpenCV V4L2 properties."""
+        if not self.camera or not self.camera.isOpened():
+            return False
+        prop_map = {
+            'brightness':    cv2.CAP_PROP_BRIGHTNESS,
+            'contrast':      cv2.CAP_PROP_CONTRAST,
+            'saturation':    cv2.CAP_PROP_SATURATION,
+            'hue':           cv2.CAP_PROP_HUE,
+            'sharpness':     cv2.CAP_PROP_SHARPNESS,
+            'auto_exposure': cv2.CAP_PROP_AUTO_EXPOSURE,
+            'exposure':      cv2.CAP_PROP_EXPOSURE,
+        }
+        for key, prop in prop_map.items():
+            if key in settings:
+                self.camera.set(prop, float(settings[key]))
+                debug_print(f"Camera {key} = {settings[key]}")
+        return True
 
     def get_frame(self):
         """Get latest frame as JPEG bytes"""
